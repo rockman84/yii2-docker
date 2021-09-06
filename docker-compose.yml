@@ -3,6 +3,7 @@ services:
 
   php:
     build:
+      container_name: yii
       dockerfile: Dockerfile-${DOCKERFILE_FLAVOUR}
       context: 'php'
       args:
@@ -17,9 +18,28 @@ services:
       - TEST_RUNTIME_PATH=/tmp/runtime
     volumes:
       - ./tests:/tests:delegated
-      # Framework testing
-      - ./_host-volumes/yii2:/yii2:delegated
-      # Application testing
-      - ./_host-volumes/app:/app:delegated
+      - ./apps/yii:/app:delegated
       # Composer cache
       - ~/.composer-docker/cache:/root/.composer/cache:delegated
+    db:
+      container_name: db-app
+      command: [ 'mysqld', '--character-set-server=utf8mb4', '--collation-server=utf8mb4_unicode_ci', '--default-authentication-plugin=mysql_native_password' ]
+      image: mysql:8.0.26
+      volumes:
+        - ./mysql/docker-volumes/etc-mysql:/etc/mysql
+        - ${MYSQL_VOLUME_DATA}:/var/lib/mysql:delegated
+      environment:
+        - TZ=${TZ}
+        - MYSQL_ROOT_HOST=${MYSQL_ROOT_HOST}
+        - MYSQL_DATABASE=${DB_APP_DATABASE_NAME}
+        - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      ports:
+        - ${MYSQL_PORT}:3306
+    certbot:
+      image: certbot/certbot
+      restart: unless-stopped
+      volumes:
+        - ./data/certbot/conf:/etc/letsencrypt
+        - ./apps/yii/web:/var/www/certbot
+      entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
